@@ -16,10 +16,10 @@
 #include <sys/wait.h>
 
 #include <X11/Xlib.h>
+#include <X11/XKBlib.h>
+#include <X11/extensions/XKBrules.h>
 
-char *tzargentina = "America/Buenos_Aires";
-char *tzutc = "UTC";
-char *tzberlin = "Europe/Berlin";
+char *tzlondon = "Europe/London";
 
 static Display *dpy;
 
@@ -164,59 +164,48 @@ getbattery(char *base)
 	return smprintf("%.0f%%%c", ((float)remcap / (float)descap) * 100, status);
 }
 
-char *
-gettemperature(char *base, char *sensor)
+char*
+getkeyboard(void)
 {
-	char *co;
+    XkbStateRec state;
+    XkbGetState(dpy, XkbUseCoreKbd, &state);
 
-	co = readfile(base, sensor);
-	if (co == NULL)
-		return smprintf("");
-	return smprintf("%02.0f°C", atof(co) / 1000);
+    XkbRF_VarDefsRec vd;
+    XkbRF_GetNamesProp(dpy, NULL, &vd);
+
+    char *tok = strtok(vd.layout, ",");
+    for (int i = 0; i < state.group; i++)
+    {
+        tok = strtok(NULL, ",");
+    }
+
+    return tok;
 }
 
 int
 main(void)
 {
 	char *status;
-	char *avgs;
 	char *bat;
-	char *bat1;
-	char *tmar;
-	char *tmutc;
-	char *tmbln;
-	char *t0, *t1, *t2;
+	char *kb;
+	char *tmlon;
 
 	if (!(dpy = XOpenDisplay(NULL))) {
 		fprintf(stderr, "dwmstatus: cannot open display.\n");
 		return 1;
 	}
 
-	for (;;sleep(60)) {
-		avgs = loadavg();
+	for (;;usleep(10)) {
 		bat = getbattery("/sys/class/power_supply/BAT0");
-		bat1 = getbattery("/sys/class/power_supply/BAT1");
-		tmar = mktimes("%H:%M", tzargentina);
-		tmutc = mktimes("%H:%M", tzutc);
-		tmbln = mktimes("KW %W %a %d %b %H:%M %Z %Y", tzberlin);
-		t0 = gettemperature("/sys/devices/virtual/hwmon/hwmon0", "temp1_input");
-		t1 = gettemperature("/sys/devices/virtual/hwmon/hwmon2", "temp1_input");
-		t2 = gettemperature("/sys/devices/virtual/hwmon/hwmon4", "temp1_input");
+        kb = getkeyboard();
+        tmlon = mktimes("%Y-%m-%d %H:%M:%S", tzlondon);
 
-		status = smprintf("T:%s|%s|%s L:%s B:%s|%s A:%s U:%s %s",
-				t0, t1, t2, avgs, bat, bat1, tmar, tmutc,
-				tmbln);
+		status = smprintf(" %s %s %s", kb, bat, tmlon);
 		setstatus(status);
 
-		free(t0);
-		free(t1);
-		free(t2);
-		free(avgs);
 		free(bat);
-		free(bat1);
-		free(tmar);
-		free(tmutc);
-		free(tmbln);
+		free(kb);
+		free(tmlon);
 		free(status);
 	}
 
